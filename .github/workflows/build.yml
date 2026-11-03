@@ -48,7 +48,7 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
-          kver=$($PODMAN run --rm "${IMAGE}:lts" ls /usr/lib/modules)
+          kver=$($PODMAN run --rm "${IMAGE}:lts" sh -c 'basename "$(dirname /usr/lib/modules/*/vmlinuz)"')
           dated="lts-${kver%.*}-$(date -u +%Y%m%d)"
           $PODMAN tag "${IMAGE}:lts" "${IMAGE}:${dated}"
           echo "${{ secrets.GITHUB_TOKEN }}" | $PODMAN login ghcr.io -u "${{ github.actor }}" --password-stdin

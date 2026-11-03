@@ -4,9 +4,12 @@
 # series that matches the kernel (for kernel-longterm-devel).
 set -euo pipefail
 
-mapfile -t kernels < <(ls /usr/lib/modules)
+# Only directories with a vmlinuz are kernels; uCore lts leaves a stray
+# initramfs.img from the Fedora kernel it replaces.
+mapfile -t kernels < <(find /usr/lib/modules -mindepth 2 -maxdepth 2 -name vmlinuz -printf '%h\n' | xargs -rn1 basename)
 if [[ ${#kernels[@]} -ne 1 ]]; then
-  echo "Expected one kernel in /usr/lib/modules, found: ${kernels[*]}" >&2
+  echo "Expected one kernel with a vmlinuz in /usr/lib/modules, found: ${kernels[*]}" >&2
+  ls /usr/lib/modules >&2
   exit 1
 fi
 kver=${kernels[0]}
