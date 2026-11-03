@@ -17,6 +17,15 @@ if [[ $vermagic != "$kver"* ]]; then
 fi
 command -v bcachefs
 
+# The COPR publishes upstream's tools beside the akmod; a Fedora build would
+# lag the module.
+tools=$(rpm -q --qf '%{VERSION}' bcachefs-tools)
+module=$(modinfo -k "$kver" -F version bcachefs)
+if [[ v${tools} != "$module" && $tools != "$module" ]]; then
+  echo "bcachefs-tools ${tools} does not match the module ${module}" >&2
+  exit 1
+fi
+
 remove_coprs
 "$dnf" clean all
 rm -rf /var/cache/* /var/lib/dnf /var/log/*
