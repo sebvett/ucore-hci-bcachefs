@@ -15,6 +15,9 @@ permissions:
 
 env:
   IMAGE: ghcr.io/${{ github.repository_owner }}/ucore-hci-bcachefs
+  # Rootful podman with its storage on the runner's large /mnt disk: the base
+  # image does not fit next to the runner's tools on /.
+  PODMAN: sudo podman --root /mnt/containers
 
 jobs:
   build:
@@ -30,23 +33,25 @@ jobs:
       - name: Build
         run: |
           set -o pipefail
-          podman build --pull=always -t "${IMAGE}:lts" -f Containerfile . 2>&1 | tee build.log
+          df -h / /mnt
+          $PODMAN build --pull=always -t "${IMAGE}:lts" -f Containerfile . 2>&1 | tee build.log
 
       # Annotations are readable through the API without signing in, unlike
       # the job log.
       - name: Report the build failure
         if: failure()
         run: |
-          tail -n 80 build.log | python3 -c 'import sys; s=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=build log tail::"+s)'
+          df -h / /mnt >> build.log
+          grep -vE '^(Copying (blob|config)|Getting image source|Writing manifest|Storing signatures)' build.log | tail -c 3500 | python3 -c 'import sys; s=sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"); print("::error title=build log tail::"+s)'
 
       - name: Push
         if: github.event_name != 'pull_request'
         run: |
           set -euo pipefail
-          kver=$(podman run --rm "${IMAGE}:lts" ls /usr/lib/modules)
+          kver=$($PODMAN run --rm "${IMAGE}:lts" ls /usr/lib/modules)
           dated="lts-${kver%.*}-$(date -u +%Y%m%d)"
-          podman tag "${IMAGE}:lts" "${IMAGE}:${dated}"
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          podman push "${IMAGE}:lts"
-          podman push "${IMAGE}:${dated}"
+          $PODMAN tag "${IMAGE}:lts" "${IMAGE}:${dated}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | $PODMAN login ghcr.io -u "${{ github.actor }}" --password-stdin
+          $PODMAN push "${IMAGE}:lts"
+          $PODMAN push "${IMAGE}:${dated}"
           echo "Pushed ${IMAGE}:lts and ${IMAGE}:${dated}" >> "$GITHUB_STEP_SUMMARY"
